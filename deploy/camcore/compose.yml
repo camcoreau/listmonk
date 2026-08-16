@@ -1,0 +1,180 @@
+name: camcore-listmonk
+
+x-listmonk-db-env: &listmonk-db-env
+  LISTMONK_db__host: db
+  LISTMONK_db__port: 5432
+  LISTMONK_db__user: listmonk
+  LISTMONK_db__password: ${LISTMONK_DB_PASSWORD:?Set LISTMONK_DB_PASSWORD}
+  LISTMONK_db__database: listmonk
+  LISTMONK_db__ssl_mode: disable
+  LISTMONK_db__max_open: 25
+  LISTMONK_db__max_idle: 25
+  LISTMONK_db__max_lifetime: 300s
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: camcore-listmonk-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: listmonk
+      POSTGRES_PASSWORD: ${LISTMONK_DB_PASSWORD:?Set LISTMONK_DB_PASSWORD}
+      POSTGRES_DB: listmonk
+      TZ: Australia/Melbourne
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U listmonk -d listmonk"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+    volumes:
+      - /opt/camcore/listmonk/postgres:/var/lib/postgresql/data
+
+    networks:
+      listmonk:
+        ipv4_address: 172.24.0.3
+
+  install:
+    image: listmonk/listmonk:v6.2.0
+    container_name: camcore-listmonk-install
+    restart: "no"
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    command:
+      - sh
+      - -c
+      - >
+        ./listmonk --install --idempotent --yes --config ''
+        && ./listmonk --upgrade --yes --config ''
+
+    environment:
+      <<: *listmonk-db-env
+      LISTMONK_ADMIN_USER: ${LISTMONK_ADMIN_USER:?Set LISTMONK_ADMIN_USER}
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASSWORD:?Set LISTMONK_ADMIN_PASSWORD}
+      TZ: Australia/Melbourne
+
+    networks:
+      - listmonk
+
+  bootstrap:
+    image: postgres:17-alpine
+    container_name: camcore-listmonk-bootstrap
+    restart: "no"
+
+    depends_on:
+      install:
+        condition: service_completed_successfully
+
+    environment:
+      PGPASSWORD: ${LISTMONK_DB_PASSWORD:?Set LISTMONK_DB_PASSWORD}
+      TZ: Australia/Melbourne
+
+    command:
+      - sh
+      - -ec
+      - |
+        psql -v ON_ERROR_STOP=1 -h db -U listmonk -d listmonk <<'SQL'
+        BEGIN;
+
+        UPDATE settings
+        SET value = COALESCE((
+          SELECT jsonb_agg(
+            CASE
+              WHEN entry->>'host' = 'smtp.yoursite.com'
+                THEN jsonb_set(entry, '{enabled}', 'false'::jsonb, true)
+              ELSE entry
+            END
+          )
+          FROM jsonb_array_elements(value) AS entry
+        ), '[]'::jsonb),
+            updated_at = NOW()
+        WHERE key = 'smtp'
+          AND NOT EXISTS (
+            SELECT 1 FROM settings WHERE key = 'camcore.bootstrap_version'
+          );
+
+        UPDATE settings
+          SET value = '"CamCore News & Updates"'::jsonb, updated_at = NOW()
+          WHERE key = 'app.site_name'
+            AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'camcore.bootstrap_version');
+
+        UPDATE settings
+          SET value = '"https://camcore.au/news"'::jsonb, updated_at = NOW()
+          WHERE key = 'app.root_url'
+            AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'camcore.bootstrap_version');
+
+        UPDATE settings
+          SET value = '"CamCore <help@camcore.au>"'::jsonb, updated_at = NOW()
+          WHERE key = 'app.from_email'
+            AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'camcore.bootstrap_version');
+
+        UPDATE settings
+          SET value = 'true'::jsonb, updated_at = NOW()
+          WHERE key = 'app.enable_public_archive'
+            AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'camcore.bootstrap_version');
+
+        UPDATE settings
+          SET value = 'false'::jsonb, updated_at = NOW()
+          WHERE key = 'app.enable_public_subscription_page'
+            AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'camcore.bootstrap_version');
+
+        UPDATE settings
+          SET value = 'false'::jsonb, updated_at = NOW()
+          WHERE key = 'app.send_optin_confirmation'
+            AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'camcore.bootstrap_version');
+
+        UPDATE settings
+          SET value = '[]'::jsonb, updated_at = NOW()
+          WHERE key = 'app.notify_emails'
+            AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'camcore.bootstrap_version');
+
+        INSERT INTO settings (key, value)
+          VALUES ('camcore.bootstrap_version', '"1"'::jsonb)
+          ON CONFLICT (key) DO NOTHING;
+
+        COMMIT;
+        SQL
+
+    networks:
+      - listmonk
+
+  app:
+    image: listmonk/listmonk:v6.2.0
+    container_name: camcore-listmonk
+    restart: unless-stopped
+
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+
+    command:
+      - sh
+      - -c
+      - exec ./listmonk --passive --config ''
+
+    environment:
+      <<: *listmonk-db-env
+      LISTMONK_app__address: 0.0.0.0:9000
+      TZ: Australia/Melbourne
+
+    ports:
+      - "${LISTMONK_BIND_IP:-192.168.5.101}:${LISTMONK_BIND_PORT:-18088}:9000"
+
+    volumes:
+      - /opt/camcore/listmonk/uploads:/listmonk/uploads:rw
+
+    networks:
+      listmonk:
+        ipv4_address: 172.24.0.2
+
+networks:
+  listmonk:
+    name: camcore-listmonk
+    ipam:
+      config:
+        - subnet: 172.24.0.0/28
