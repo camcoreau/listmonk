@@ -18,16 +18,26 @@ Port `9001` is reserved by the Portainer Agent on Ganymede and must not be used 
 
 ## Safety state
 
-The supplied Compose file starts Listmonk with `--passive` and does not configure SMTP.
+The supplied Compose stack is deliberately non-sending by default.
 
-This is intentional. In this state:
+Startup order is:
 
-- campaigns are not processed by the campaign manager;
-- no SMTP server is configured in Listmonk;
-- the UI, lists, templates, subscribers and public archive can be prepared safely;
-- production sending must not be enabled until a Jayden-only test campaign has been reviewed.
+1. PostgreSQL becomes healthy.
+2. The one-shot `install` service runs Listmonk's idempotent install/upgrade.
+3. The one-shot `bootstrap` service applies `bootstrap.sql`.
+4. The long-running Listmonk app starts with `--passive`.
 
-Removing `--passive` is a deliberate production-enablement change and should be made separately.
+The safety bootstrap:
+
+- disables Listmonk v6.2.0's seeded example SMTP entries;
+- sets the initial site name to `CamCore News & Updates`;
+- sets the canonical root URL to `https://camcore.au/news`;
+- sets the default sender identity to `CamCore <help@camcore.au>`;
+- enables the public archive;
+- disables public self-subscription and opt-in confirmation initially;
+- leaves any future real CamCore SMTP configuration untouched on later redeployments.
+
+In addition, passive mode prevents the campaign manager from processing campaigns. Production sending must not be enabled until a Jayden-only test campaign has been reviewed.
 
 ## Portainer deployment
 
@@ -55,32 +65,27 @@ LISTMONK_ADMIN_PASSWORD=<long random password>
 LISTMONK_DB_PASSWORD=<different long random password>
 ```
 
-Deploy from Portainer and verify that both `camcore-listmonk` and `camcore-listmonk-db` are healthy/running.
+Deploy from Portainer. The `install` and `bootstrap` containers should exit successfully after doing their one-shot work. `camcore-listmonk-db` should remain healthy and `camcore-listmonk` should remain running.
 
-Expected first-start log text includes the passive-mode notice that campaigns will not be processed.
+Expected application log text includes:
 
-## Initial Listmonk settings
+`running in passive mode. won't process campaigns.`
 
-Open the local admin console at:
+It should no longer initialise the seeded `username@smtp.yoursite.com` SMTP messenger.
+
+## Initial access
+
+Open the private/local admin console at:
 
 `http://192.168.5.101:18088/admin`
 
-Before any public route is enabled, configure:
+The bootstrap already applies the initial CamCore site name, root URL, sender identity and public archive settings. SMTP remains disabled.
 
-- Site name: `CamCore News & Updates`
-- Root URL: `https://camcore.au/news`
-- Public archive: enabled
-- Public subscription page: disabled initially
-- From email: `CamCore <help@camcore.au>`
-- Logo/favicon: CamCore assets
-
-Do not configure an SMTP server during the initial deployment.
-
-The custom public template in `static/public/templates/index.html` prefixes Listmonk public static assets with `RootURL`, allowing the public archive and subscriber-facing pages to work behind the `/news` gateway while leaving Listmonk's admin/API routes private.
+The custom public template in `static/public/templates/index.html` prefixes Listmonk public static assets with `RootURL`, allowing subscriber-facing pages to work behind the `/news` gateway while leaving Listmonk's admin/private API routes off the public CamCore site.
 
 ## Public gateway
 
-The CamCore portal should proxy only subscriber-facing Listmonk routes under `/news` and strip the `/news` prefix before forwarding them to `http://192.168.5.101:18088`.
+The CamCore portal proxies only subscriber-facing Listmonk routes under `/news` and strips the `/news` prefix before forwarding them to `http://192.168.5.101:18088`.
 
 Public routes include the archive, campaign views, tracking links, subscription pages, public assets and public captcha endpoints. `/admin` and private `/api` routes must not be exposed through `camcore.au/news`.
 
