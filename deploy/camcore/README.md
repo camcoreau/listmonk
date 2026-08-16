@@ -6,12 +6,15 @@ This directory contains the CamCore deployment layer for Listmonk on Ganymede.
 
 - Host: Ganymede (`192.168.5.101`)
 - Public news URL: `https://camcore.au/news`
-- Local Listmonk bind: `192.168.5.101:9001`
+- Local Listmonk bind: `192.168.5.101:18088`
 - Listmonk container IP: `172.24.0.2`
 - PostgreSQL container IP: `172.24.0.3`
 - Docker network: `camcore-listmonk` (`172.24.0.0/28`)
 - Sender/reply mailbox when mail is later enabled: `help@camcore.au`
 - Outbound relay when mail is later enabled: Ganymede Postfix -> Microsoft 365
+- Runtime management: Portainer Git-backed stack
+
+Port `9001` is reserved by the Portainer Agent on Ganymede and must not be used by Listmonk.
 
 ## Safety state
 
@@ -26,35 +29,33 @@ This is intentional. In this state:
 
 Removing `--passive` is a deliberate production-enablement change and should be made separately.
 
-## First deployment
+## Portainer deployment
 
-On Ganymede:
+Create the persistent directories once on Ganymede:
 
 ```bash
 sudo mkdir -p /opt/camcore/listmonk/{uploads,postgres}
-sudo chown -R "$USER":"$USER" /opt/camcore/listmonk
-
-cd /opt/camcore/listmonk
-git clone https://github.com/camcoreau/listmonk.git source
-cd source
-git checkout agent/camcore-deployment-live
-cd deploy/camcore
-cp .env.example .env
 ```
 
-Generate two different long random passwords and place them in `.env` for:
+Create a Portainer stack with:
 
-- `LISTMONK_ADMIN_PASSWORD`
-- `LISTMONK_DB_PASSWORD`
+- Name: `camcore-listmonk`
+- Build method: Repository
+- Repository URL: `https://github.com/camcoreau/listmonk.git`
+- Repository reference during testing: `refs/heads/agent/camcore-deployment-live`
+- Compose path: `deploy/camcore/compose.yml`
 
-Then validate and start:
+Set these environment variables in Portainer:
 
-```bash
-docker compose --env-file .env config
-docker compose --env-file .env up -d
-docker compose --env-file .env ps
-docker logs --tail 100 camcore-listmonk
+```env
+LISTMONK_BIND_IP=192.168.5.101
+LISTMONK_BIND_PORT=18088
+LISTMONK_ADMIN_USER=camcore_admin
+LISTMONK_ADMIN_PASSWORD=<long random password>
+LISTMONK_DB_PASSWORD=<different long random password>
 ```
+
+Deploy from Portainer and verify that both `camcore-listmonk` and `camcore-listmonk-db` are healthy/running.
 
 Expected first-start log text includes the passive-mode notice that campaigns will not be processed.
 
@@ -62,7 +63,7 @@ Expected first-start log text includes the passive-mode notice that campaigns wi
 
 Open the local admin console at:
 
-`http://192.168.5.101:9001/admin`
+`http://192.168.5.101:18088/admin`
 
 Before any public route is enabled, configure:
 
@@ -79,7 +80,7 @@ The custom public template in `static/public/templates/index.html` prefixes List
 
 ## Public gateway
 
-The CamCore portal should proxy only subscriber-facing Listmonk routes under `/news` and strip the `/news` prefix before forwarding them to `http://192.168.5.101:9001`.
+The CamCore portal should proxy only subscriber-facing Listmonk routes under `/news` and strip the `/news` prefix before forwarding them to `http://192.168.5.101:18088`.
 
 Public routes include the archive, campaign views, tracking links, subscription pages, public assets and public captcha endpoints. `/admin` and private `/api` routes must not be exposed through `camcore.au/news`.
 
