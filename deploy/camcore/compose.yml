@@ -34,7 +34,7 @@ services:
       TZ: Australia/Melbourne
 
     ports:
-      - "${LISTMONK_BIND_IP:-192.168.5.101}:${LISTMONK_BIND_PORT:-9001}:9000"
+      - "${LISTMONK_BIND_IP:-192.168.5.101}:${LISTMONK_BIND_PORT:-18088}:9000"
 
     volumes:
       - /opt/camcore/listmonk/uploads:/listmonk/uploads:rw
