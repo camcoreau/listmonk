@@ -24,20 +24,22 @@ Startup order is:
 
 1. PostgreSQL becomes healthy.
 2. The one-shot `install` service runs Listmonk's idempotent install/upgrade.
-3. The one-shot `bootstrap` service applies `bootstrap.sql`.
+3. The one-shot `bootstrap` service runs an inline PostgreSQL safety bootstrap.
 4. The long-running Listmonk app starts with `--passive`.
 
-The safety bootstrap:
+The safety bootstrap runs once, marked by `camcore.bootstrap_version`, and:
 
-- disables Listmonk v6.2.0's seeded example SMTP entries;
+- disables Listmonk v6.2.0's seeded `smtp.yoursite.com` example;
 - sets the initial site name to `CamCore News & Updates`;
 - sets the canonical root URL to `https://camcore.au/news`;
 - sets the default sender identity to `CamCore <help@camcore.au>`;
 - enables the public archive;
 - disables public self-subscription and opt-in confirmation initially;
-- leaves any future real CamCore SMTP configuration untouched on later redeployments.
+- does not overwrite later real CamCore SMTP settings on normal redeployments.
 
 In addition, passive mode prevents the campaign manager from processing campaigns. Production sending must not be enabled until a Jayden-only test campaign has been reviewed.
+
+The Portainer deployment uses no repository-relative bind mounts. Only the persistent host paths under `/opt/camcore/listmonk` are mounted at runtime.
 
 ## Portainer deployment
 
@@ -71,7 +73,7 @@ Expected application log text includes:
 
 `running in passive mode. won't process campaigns.`
 
-It should no longer initialise the seeded `username@smtp.yoursite.com` SMTP messenger.
+It should not initialise the seeded `username@smtp.yoursite.com` SMTP messenger after the bootstrap has completed.
 
 ## Initial access
 
@@ -81,11 +83,11 @@ Open the private/local admin console at:
 
 The bootstrap already applies the initial CamCore site name, root URL, sender identity and public archive settings. SMTP remains disabled.
 
-The custom public template in `static/public/templates/index.html` prefixes Listmonk public static assets with `RootURL`, allowing subscriber-facing pages to work behind the `/news` gateway while leaving Listmonk's admin/private API routes off the public CamCore site.
-
 ## Public gateway
 
 The CamCore portal proxies only subscriber-facing Listmonk routes under `/news` and strips the `/news` prefix before forwarding them to `http://192.168.5.101:18088`.
+
+The gateway rewrites Listmonk's root-relative public asset URLs so `/public/...` assets are requested as `/news/public/...`. This avoids requiring a custom Listmonk template bind mount in Portainer.
 
 Public routes include the archive, campaign views, tracking links, subscription pages, public assets and public captcha endpoints. `/admin` and private `/api` routes must not be exposed through `camcore.au/news`.
 
