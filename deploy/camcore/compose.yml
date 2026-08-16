@@ -38,6 +38,7 @@ services:
 
   install:
     image: listmonk/listmonk:v6.2.0
+    container_name: camcore-listmonk-install
     restart: "no"
 
     depends_on:
@@ -62,6 +63,7 @@ services:
 
   bootstrap:
     image: postgres:17-alpine
+    container_name: camcore-listmonk-bootstrap
     restart: "no"
 
     depends_on:
