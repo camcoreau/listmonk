@@ -1,0 +1,76 @@
+name: camcore-listmonk
+
+services:
+  app:
+    image: listmonk/listmonk:v6.2.0
+    container_name: camcore-listmonk
+    restart: unless-stopped
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    command:
+      - sh
+      - -c
+      - >
+        ./listmonk --install --idempotent --yes --config ''
+        && ./listmonk --upgrade --yes --config ''
+        && exec ./listmonk --passive --static-dir /listmonk/camcore-static --config ''
+
+    environment:
+      LISTMONK_app__address: 0.0.0.0:9000
+      LISTMONK_db__host: db
+      LISTMONK_db__port: 5432
+      LISTMONK_db__user: listmonk
+      LISTMONK_db__password: ${LISTMONK_DB_PASSWORD:?Set LISTMONK_DB_PASSWORD}
+      LISTMONK_db__database: listmonk
+      LISTMONK_db__ssl_mode: disable
+      LISTMONK_db__max_open: 25
+      LISTMONK_db__max_idle: 25
+      LISTMONK_db__max_lifetime: 300s
+      LISTMONK_ADMIN_USER: ${LISTMONK_ADMIN_USER:?Set LISTMONK_ADMIN_USER}
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASSWORD:?Set LISTMONK_ADMIN_PASSWORD}
+      TZ: Australia/Melbourne
+
+    ports:
+      - "${LISTMONK_BIND_IP:-192.168.5.101}:${LISTMONK_BIND_PORT:-9001}:9000"
+
+    volumes:
+      - /opt/camcore/listmonk/uploads:/listmonk/uploads:rw
+      - ./static:/listmonk/camcore-static:ro
+
+    networks:
+      listmonk:
+        ipv4_address: 172.24.0.2
+
+  db:
+    image: postgres:17-alpine
+    container_name: camcore-listmonk-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: listmonk
+      POSTGRES_PASSWORD: ${LISTMONK_DB_PASSWORD:?Set LISTMONK_DB_PASSWORD}
+      POSTGRES_DB: listmonk
+      TZ: Australia/Melbourne
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U listmonk -d listmonk"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+    volumes:
+      - /opt/camcore/listmonk/postgres:/var/lib/postgresql/data
+
+    networks:
+      listmonk:
+        ipv4_address: 172.24.0.3
+
+networks:
+  listmonk:
+    name: camcore-listmonk
+    ipam:
+      config:
+        - subnet: 172.24.0.0/28
