@@ -155,11 +155,12 @@ services:
     command:
       - sh
       - -c
-      - exec ./listmonk --passive --config ''
+      - exec ./listmonk --config ''
 
     environment:
       <<: *listmonk-db-env
       LISTMONK_app__address: 0.0.0.0:9000
+      LISTMONK_PASSIVE: ${LISTMONK_PASSIVE:-true}
       TZ: Australia/Melbourne
 
     ports:

@@ -25,7 +25,7 @@ Startup order is:
 1. PostgreSQL becomes healthy.
 2. The one-shot `install` service runs Listmonk's idempotent install/upgrade.
 3. The one-shot `bootstrap` service runs an inline PostgreSQL safety bootstrap.
-4. The long-running Listmonk app starts with `--passive`.
+4. The long-running Listmonk app reads `LISTMONK_PASSIVE`, which defaults to `true`.
 
 The safety bootstrap runs once, marked by `camcore.bootstrap_version`, and:
 
@@ -62,6 +62,7 @@ Set these environment variables in Portainer:
 ```env
 LISTMONK_BIND_IP=192.168.5.101
 LISTMONK_BIND_PORT=18088
+LISTMONK_PASSIVE=true
 LISTMONK_ADMIN_USER=camcore_admin
 LISTMONK_ADMIN_PASSWORD=<long random password>
 LISTMONK_DB_PASSWORD=<different long random password>
@@ -110,7 +111,7 @@ sudo systemctl reload postfix
 
 Then configure Listmonk SMTP to submit to `192.168.5.101:25` without authentication, using `help@camcore.au` as the sender/reply mailbox.
 
-Before removing passive mode, send a test only to a dedicated Jayden test list and verify successful delivery through Microsoft 365.
+Before disabling passive mode, send a test only to a dedicated Jayden test list and verify successful delivery through Microsoft 365. Then inspect Listmonk for any scheduled or running campaigns, set `LISTMONK_PASSIVE=false` in Portainer and pull/redeploy the Git-backed stack. Confirm the passive-mode message is absent from the restarted application log before scheduling a production campaign.
 
 ## Backups
 
