@@ -2,7 +2,7 @@
 
 This repository is CamCore's deployment fork of
 [listmonk](https://github.com/knadh/listmonk). It carries the reviewed
-configuration used to integrate the upstream application with **CamCore —
+configuration used to integrate the upstream application with **CamCore –
 Cameron Family Secure Network**.
 
 > **CamCore is a privately owned and operated family technology network that
