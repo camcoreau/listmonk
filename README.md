@@ -1,3 +1,43 @@
+# CamCore News & Updates deployment
+
+This repository is CamCore's deployment fork of
+[listmonk](https://github.com/knadh/listmonk). It carries the reviewed
+configuration used to integrate the upstream application with **CamCore –
+Cameron Family Secure Network**.
+
+> **CamCore is a privately owned and operated family technology network that
+> delivers secure, reliable and professionally managed digital services for the
+> Cameron household, Cameron-Media and associated family operations.**
+
+**Built for Home. Engineered Like Enterprise.**
+
+## CamCore scope
+
+- **Application source:** listmonk remains an upstream project maintained by
+  knadh and its contributors. CamCore does not claim authorship of the upstream
+  application.
+- **Runtime image:** the CamCore deployment uses the official
+  `listmonk/listmonk:v6.2.0` image. This repository does not publish a separate
+  CamCore application image.
+- **Deployment layer:** [`deploy/camcore/`](deploy/camcore/) contains the
+  Compose stack, safe bootstrap and operating guidance for CamCore.
+- **Safety boundary:** campaign processing starts in passive mode. The intended
+  public surface is the subscriber-facing [`/news`](https://camcore.au/news)
+  gateway; the administration console and private API are not public routes.
+- **State:** repository contents describe the source and deployment contract.
+  They do not by themselves prove that a particular revision is deployed or
+  that the live service is healthy.
+
+See the [CamCore deployment guide](deploy/camcore/README.md) for configuration,
+verification, backup and controlled mail-enablement guidance.
+
+The upstream application remains licensed under the
+[GNU Affero General Public License v3.0](LICENSE).
+
+---
+
+## Upstream listmonk documentation
+
 <a href="https://zerodha.tech"><img src="https://zerodha.tech/static/images/github-badge.svg" align="right" /></a>
 
 [![listmonk-logo](https://user-images.githubusercontent.com/547147/231084896-835dba66-2dfe-497c-ba0f-787564c0819e.png)](https://listmonk.app)
